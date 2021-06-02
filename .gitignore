@@ -12,3 +12,6 @@ imgs/
 # Python virtual environment
 pyenv/
 
+# vscode config
+.vscode/
+

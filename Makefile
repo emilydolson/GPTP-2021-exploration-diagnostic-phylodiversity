@@ -1,6 +1,6 @@
 # Project-specific settings
 PROJECT := dia_world
-EMP_DIR := ../../Empirical/source
+EMP_DIR := ../Empirical/include
 CEREAL_DIR := ../../Empirical/third-party/cereal/include
 
 # Flags to use regardless of compiler

@@ -1,7 +1,7 @@
 #ifndef DIA_CONFIG_H
 #define DIA_CONFIG_H
 
-#include "config/config.h"
+#include "emp/config/config.hpp"
 
 EMP_BUILD_CONFIG(DiaConfig,
   GROUP(WORLD, "How should the world be setup?"),

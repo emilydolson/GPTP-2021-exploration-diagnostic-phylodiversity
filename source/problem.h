@@ -6,7 +6,7 @@
 #include <algorithm>
 
 ///< empirical headers
-#include "base/vector.h"
+#include "emp/base/vector.hpp"
 
 class Diagnostic
 {

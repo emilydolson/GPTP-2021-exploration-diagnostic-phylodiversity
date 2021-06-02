@@ -9,9 +9,9 @@
 #include <set>
 
 ///< empirical headers
-#include "Evolve/World.h"
-#include "tools/Random.h"
-#include "tools/random_utils.h"
+#include "emp/Evolve/World.hpp"
+#include "emp/math/Random.hpp"
+#include "emp/math/random_utils.hpp"
 
 ///< experiment headers
 #include "config.h"

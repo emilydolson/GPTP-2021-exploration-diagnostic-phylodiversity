@@ -13,9 +13,9 @@
 #include <numeric>
 
 ///< empirical headers
-#include "base/vector.h"
-#include "tools/Random.h"
-#include "tools/random_utils.h"
+#include "emp/base/vector.hpp"
+#include "emp/math/Random.hpp"
+#include "emp/math/random_utils.hpp"
 
 ///< constant vars
 constexpr size_t DRIFT_SIZE = 1;

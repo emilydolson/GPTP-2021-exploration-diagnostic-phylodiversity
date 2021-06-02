@@ -7,7 +7,7 @@
 #include <algorithm>
 
 ///< empirical headers
-#include "base/vector.h"
+#include "emp/base/vector.hpp"
 
 ///< coordiante we start from
 constexpr double START_DB = 0.0;

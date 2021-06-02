@@ -254,7 +254,7 @@ class DiagWorld : public emp::World<Org>
     // file we are working with
     emp::DataFile data_file;
     // systematics tracking
-    // emp::Ptr<systematics_t> sys_ptr;
+    emp::Ptr<systematics_t> sys_ptr;
     // node to track population fitnesses
     nodef_t pop_fit;
     // node to track population opitmized count
@@ -522,26 +522,26 @@ void DiagWorld::SetDataTracking()
   // systematic tracking (ask alex about it)
   std::cerr << "Setting up systematics tracking..." << std::endl;
 
-  // sys_ptr = emp::NewPtr<systematics_t>([](const Org & o) {return o.GetGenome();});
+  sys_ptr = emp::NewPtr<systematics_t>([](const Org & o) { return o.GetGenome(); });
 
-  // sys_ptr->AddSnapshotFun([](const taxon_t & taxon) {
-  //   return emp::to_string(taxon.GetData().GetFitness());
-  // }, "fitness", "Taxon fitness");
+  sys_ptr->AddSnapshotFun([](const taxon_t & taxon) {
+    return emp::to_string(taxon.GetData().GetFitness());
+  }, "fitness", "Taxon fitness");
 
-  // sys_ptr->AddSnapshotFun([](const taxon_t & taxon) {
-  //   return emp::ToString(taxon.GetData().GetPhenotype());
-  // }, "phenotype", "Taxon Phenotype");
+  sys_ptr->AddSnapshotFun([](const taxon_t & taxon) {
+    return emp::ToString(taxon.GetData().GetPhenotype());
+  }, "phenotype", "Taxon Phenotype");
 
-  // sys_ptr->AddSnapshotFun([](const taxon_t & taxon) {
-  //   return emp::ToString(taxon.GetInfo());
-  // }, "genotype", "Taxon Genotype");
+  sys_ptr->AddSnapshotFun([](const taxon_t & taxon) {
+    return emp::ToString(taxon.GetInfo());
+  }, "genotype", "Taxon Genotype");
 
   // will add it to the world for tracking purposes
-  // AddSystematics(sys_ptr);
+  AddSystematics(sys_ptr);
   // summary stats (whatever resolution we want)
-  // SetupSystematicsFile(0, config.OUTPUT_DIR() + "systematics.csv").SetTimingRepeat(config.PRINT_INTERVAL());
+  SetupSystematicsFile(0, config.OUTPUT_DIR() + "systematics.csv").SetTimingRepeat(config.DATA_INTERVAL());
 
-  // std::cerr << "Systematics tracking complete!" << std::endl;
+  std::cerr << "Systematics tracking complete!" << std::endl;
 
   // initialize all nodes (ask charles)
   std::cerr << "Initializing nodes..." << std::endl;
@@ -781,9 +781,9 @@ void DiagWorld::EvaluationStep()
     fit_vec[i] = (org.GetClone()) ? org.GetAggregate() : evaluate(org);
 
     // systematic stuff
-    // emp::Ptr<taxon_t> taxon = sys_ptr->GetTaxonAt(i);
-    // taxon->GetData().RecordFitness(org.GetAggregate());
-    // taxon->GetData().RecordPhenotype(org.GetScore());
+    emp::Ptr<taxon_t> taxon = sys_ptr->GetTaxonAt(i);
+    taxon->GetData().RecordFitness(org.GetAggregate());
+    taxon->GetData().RecordPhenotype(org.GetScore());
   }
 }
 
@@ -854,6 +854,12 @@ void DiagWorld::RecordData()
     Org & opt = *pop[opti_pos];
     std::cout << "gen=" << GetUpdate() << ", max_fit=" << org.GetAggregate()  << ", max_opt=" << opt.GetCount() << std::endl;
   }
+
+  // snapshot the phylogeny
+  if ( !(GetUpdate() % config.SNAP_INTERVAL()) || (GetUpdate() == config.MAX_GENS()) ) {
+    sys_ptr->Snapshot(config.OUTPUT_DIR() + "phylo_" + emp::to_string(GetUpdate()) + ".csv");
+  }
+
 }
 
 void DiagWorld::ReproductionStep()

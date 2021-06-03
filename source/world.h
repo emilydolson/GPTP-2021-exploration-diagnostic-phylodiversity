@@ -95,15 +95,21 @@ class DiagWorld : public emp::World<Org>
     using como_t = std::map<size_t, ids_t>;
 
     ///< systematics tracking types
-    using systematics_t = emp::Systematics<Org, Org::genome_t, pheno_info<typename Org::score_t>>;
-    using taxon_t = typename systematics_t::taxon_t;
+    using gen_systematics_t = emp::Systematics<Org, Org::genome_t, pheno_info<typename Org::score_t>>;
+    using gen_taxon_t = typename gen_systematics_t::taxon_t;
+
+    using phen_systematics_t = emp::Systematics<Org, Org::score_t, pheno_info<typename Org::score_t>>;
+    using phen_taxon_t = typename phen_systematics_t::taxon_t;
 
     using config_t = DiaConfig;
 
 
   public:
 
-    DiagWorld(DiaConfig & _config) : config(_config), data_file(_config.OUTPUT_DIR() + "data.csv")
+    DiagWorld(DiaConfig & _config) :
+      config(_config),
+      data_file(_config.OUTPUT_DIR() + "data.csv"),
+      phylodiversity_file(_config.OUTPUT_DIR() + "phylodiversity.csv")
     {
       // set random pointer seed
       random_ptr = emp::NewPtr<emp::Random>(config.SEED());
@@ -253,8 +259,11 @@ class DiagWorld : public emp::World<Org>
 
     // file we are working with
     emp::DataFile data_file;
+    emp::DataFile phylodiversity_file;
+
     // systematics tracking
-    emp::Ptr<systematics_t> sys_ptr;
+    emp::Ptr<gen_systematics_t> gen_sys_ptr;
+    emp::Ptr<phen_systematics_t> phen_sys_ptr;
     // node to track population fitnesses
     nodef_t pop_fit;
     // node to track population opitmized count
@@ -288,17 +297,18 @@ void DiagWorld::Initialize()
   Reset();
   // set world to well mixed so we don't over populate
   SetPopStruct_Mixed(true);
-
+  SetSynchronousSystematics(true);
 
   // stuff we need to initialize for the experiment
   SetEvaluation();
   SetMutation();
-  SetOnUpdate();
   SetDataTracking();
   SetSelection();
-  SetOnOffspringReady();
+  // SetOnOffspringReady();
   PopulateWorld();
 
+  SetOnUpdate();
+  SetAutoMutate();
   SnapshotConfig(config);
 
   std::cerr << "==========================================" << std::endl;
@@ -437,39 +447,39 @@ void DiagWorld::SetSelection()
   std::cerr << "Finished setting the Selection function! \n" << std::endl;
 }
 
-void DiagWorld::SetOnOffspringReady()
-{
-  std::cerr << "------------------------------------------------" << std::endl;
-  std::cerr << "Setting OnOffspringReady function..." << std::endl;
+// void DiagWorld::SetOnOffspringReady()
+// {
+//   std::cerr << "------------------------------------------------" << std::endl;
+//   std::cerr << "Setting OnOffspringReady function..." << std::endl;
 
-  OnOffspringReady([this](Org & org, size_t parent_pos)
-  {
-    // quick checks
-    emp_assert(fun_do_mutations); emp_assert(random_ptr);
-    emp_assert(org.GetGenome().size() == config.OBJECTIVE_CNT());
-    emp_assert(org.GetM() == config.OBJECTIVE_CNT());
+//   OnOffspringReady([this](Org & org, size_t parent_pos)
+//   {
+//     // quick checks
+//     emp_assert(fun_do_mutations); emp_assert(random_ptr);
+//     emp_assert(org.GetGenome().size() == config.OBJECTIVE_CNT());
+//     emp_assert(org.GetM() == config.OBJECTIVE_CNT());
 
-    // do mutations on offspring
-    size_t mcnt = fun_do_mutations(org, *random_ptr);
+//     // do mutations on offspring
+//     size_t mcnt = fun_do_mutations(org, *random_ptr);
 
-    // no mutations were applied to offspring
-    if(mcnt == 0)
-    {
-      Org & parent = *pop[parent_pos];
+//     // no mutations were applied to offspring
+//     if(mcnt == 0)
+//     {
+//       Org & parent = *pop[parent_pos];
 
-      // quick checks
-      emp_assert(parent.GetGenome().size() == config.OBJECTIVE_CNT());
-      emp_assert(parent.GetM() == config.OBJECTIVE_CNT());
+//       // quick checks
+//       emp_assert(parent.GetGenome().size() == config.OBJECTIVE_CNT());
+//       emp_assert(parent.GetM() == config.OBJECTIVE_CNT());
 
-      // give everything to offspring from parent
-      org.MeClone();
-      org.Inherit(parent.GetScore(), parent.GetOptimal(), parent.GetCount(), parent.GetAggregate(), parent.GetStart());
-    }
-    else{org.Reset();}
-  });
+//       // give everything to offspring from parent
+//       org.MeClone();
+//       org.Inherit(parent.GetScore(), parent.GetOptimal(), parent.GetCount(), parent.GetAggregate(), parent.GetStart());
+//     }
+//     else{org.Reset();}
+//   });
 
-  std::cerr << "Finished setting OnOffspringReady function!\n" << std::endl;
-}
+//   std::cerr << "Finished setting OnOffspringReady function!\n" << std::endl;
+// }
 
 void DiagWorld::SetEvaluation()
 {
@@ -522,24 +532,59 @@ void DiagWorld::SetDataTracking()
   // systematic tracking (ask alex about it)
   std::cerr << "Setting up systematics tracking..." << std::endl;
 
-  sys_ptr = emp::NewPtr<systematics_t>([](const Org & o) { return o.GetGenome(); });
+  // -- GENOTYPE SYSTEMATICS --
+  gen_sys_ptr = emp::NewPtr<gen_systematics_t>([](const Org & o) { return o.GetGenome(); });
 
-  sys_ptr->AddSnapshotFun([](const taxon_t & taxon) {
+  gen_sys_ptr->AddSnapshotFun([](const gen_taxon_t & taxon) {
     return emp::to_string(taxon.GetData().GetFitness());
   }, "fitness", "Taxon fitness");
 
-  sys_ptr->AddSnapshotFun([](const taxon_t & taxon) {
+  gen_sys_ptr->AddSnapshotFun([](const gen_taxon_t & taxon) {
     return emp::ToString(taxon.GetData().GetPhenotype());
   }, "phenotype", "Taxon Phenotype");
 
-  sys_ptr->AddSnapshotFun([](const taxon_t & taxon) {
+  gen_sys_ptr->AddSnapshotFun([](const gen_taxon_t & taxon) {
     return emp::ToString(taxon.GetInfo());
   }, "genotype", "Taxon Genotype");
 
-  // will add it to the world for tracking purposes
-  AddSystematics(sys_ptr);
-  // summary stats (whatever resolution we want)
-  SetupSystematicsFile(0, config.OUTPUT_DIR() + "systematics.csv").SetTimingRepeat(config.DATA_INTERVAL());
+  gen_sys_ptr->AddEvolutionaryDistinctivenessDataNode();
+  gen_sys_ptr->AddPairwiseDistanceDataNode();
+  gen_sys_ptr->AddPhylogeneticDiversityDataNode();
+
+  AddSystematics(gen_sys_ptr, "genotype");
+  SetupSystematicsFile("genotype", config.OUTPUT_DIR() + "genotype_systematics.csv").SetTimingRepeat(config.DATA_INTERVAL());
+
+
+  // -- PHENOTYPE SYSTEMATICS --
+  // @AML: had to hack this recalculation in to allow world to manage updates to the phenotype systematics
+  phen_sys_ptr = emp::NewPtr<phen_systematics_t>(
+    [this](const Org & o) {
+      if (!o.GetScored()) {
+        Org sys_org(o);
+        evaluate(sys_org);
+        return sys_org.GetScore();
+      } else {
+        return o.GetScore();
+      }
+    }
+  );
+
+  phen_sys_ptr->AddEvolutionaryDistinctivenessDataNode();
+  phen_sys_ptr->AddPairwiseDistanceDataNode();
+  phen_sys_ptr->AddPhylogeneticDiversityDataNode();
+
+  AddSystematics(phen_sys_ptr, "phenotype");
+  SetupSystematicsFile("phenotype", config.OUTPUT_DIR() + "phenotype_systematics.csv").SetTimingRepeat(config.DATA_INTERVAL());
+
+  // -- PHYLODIVERSITY DATA FILE --
+  phylodiversity_file.AddVar(update, "generation", "Generation");
+  phylodiversity_file.AddStats(*gen_sys_ptr->GetDataNode("evolutionary_distinctiveness") , "genotype_evolutionary_distinctiveness", "evolutionary distinctiveness for a single update", true, true);
+  phylodiversity_file.AddStats(*gen_sys_ptr->GetDataNode("pairwise_distance"), "genotype_pairwise_distance", "pairwise distance for a single update", true, true);
+  phylodiversity_file.AddCurrent(*gen_sys_ptr->GetDataNode("phylogenetic_diversity"), "genotype_current_phylogenetic_diversity", "current phylogenetic_diversity", true, true);
+  phylodiversity_file.AddStats(*phen_sys_ptr->GetDataNode("evolutionary_distinctiveness") , "phenotype_evolutionary_distinctiveness", "evolutionary distinctiveness for a single update", true, true);
+  phylodiversity_file.AddStats(*phen_sys_ptr->GetDataNode("pairwise_distance"), "phenotype_pairwise_distance", "pairwise distance for a single update", true, true);
+  phylodiversity_file.AddCurrent(*phen_sys_ptr->GetDataNode("phylogenetic_diversity"), "phenotype_current_phylogenetic_diversity", "current phylogenetic_diversity", true, true);
+  phylodiversity_file.PrintHeaderKeys();
 
   std::cerr << "Systematics tracking complete!" << std::endl;
 
@@ -738,7 +783,28 @@ void DiagWorld::PopulateWorld()
 
   // Fill the workd with requested population size!
   Org org(config.OBJECTIVE_CNT());
-  Inject(org.GetGenome(), config.POP_SIZE());
+  // Inject(org.GetGenome(), config.POP_SIZE());
+  // Inject a common ancestor, do birth off the ancestor to keep tree rooted.
+  Inject(org.GetGenome(), 1);
+  emp_assert(pop.size() > 0);
+
+  Org & ancestor = *(pop[0]);
+  // Reset organism data (to be re-evaluated now)
+  ancestor.Reset();
+  evaluate(ancestor);
+
+  // Record fitness/phenotype information for systematics tracking
+  emp::Ptr<gen_taxon_t> gen_taxon = gen_sys_ptr->GetTaxonAt(0);
+  gen_taxon->GetData().RecordFitness(ancestor.GetAggregate());
+  gen_taxon->GetData().RecordPhenotype(ancestor.GetScore());
+
+  emp::Ptr<phen_taxon_t> phen_taxon = phen_sys_ptr->GetTaxonAt(0);
+  phen_taxon->GetData().RecordFitness(ancestor.GetAggregate());
+  phen_taxon->GetData().RecordPhenotype(ancestor.GetScore());
+
+  DoBirth(ancestor.GetGenome(), 0, config.POP_SIZE());
+
+  Update();
 
   std::cerr << "Initialing world complete!" << std::endl;
 }
@@ -775,15 +841,21 @@ void DiagWorld::EvaluationStep()
   fit_vec.resize(config.POP_SIZE());
   for(size_t i = 0; i < pop.size(); ++i)
   {
-    Org & org = *pop[i];
+    Org & org = *(pop[i]);
+    // Reset organism data (to be re-evaluated now)
+    org.Reset();
 
     // no evaluate needed if offspring is a clone
-    fit_vec[i] = (org.GetClone()) ? org.GetAggregate() : evaluate(org);
+    fit_vec[i] = evaluate(org);
 
-    // systematic stuff
-    emp::Ptr<taxon_t> taxon = sys_ptr->GetTaxonAt(i);
-    taxon->GetData().RecordFitness(org.GetAggregate());
-    taxon->GetData().RecordPhenotype(org.GetScore());
+    // Record fitness/phenotype information for systematics tracking
+    emp::Ptr<gen_taxon_t> gen_taxon = gen_sys_ptr->GetTaxonAt(i);
+    gen_taxon->GetData().RecordFitness(org.GetAggregate());
+    gen_taxon->GetData().RecordPhenotype(org.GetScore());
+
+    emp::Ptr<phen_taxon_t> phen_taxon = phen_sys_ptr->GetTaxonAt(i);
+    phen_taxon->GetData().RecordFitness(org.GetAggregate());
+    phen_taxon->GetData().RecordPhenotype(org.GetScore());
   }
 }
 
@@ -844,11 +916,12 @@ void DiagWorld::RecordData()
   emp_assert(0 < common.size());  // should already be set in FindCommon
 
   /// update the file
-  if ( !(GetUpdate() % config.DATA_INTERVAL()) || (GetUpdate() == config.MAX_GENS()) ) {
+  if ( !(GetUpdate() % config.DATA_INTERVAL()) || (GetUpdate() == config.MAX_GENS()) || (GetUpdate() <= 1)) {
     data_file.Update();
+    phylodiversity_file.Update();
   }
 
-  if ( !(GetUpdate() % config.PRINT_INTERVAL()) || (GetUpdate() == config.MAX_GENS()) ) {
+  if ( !(GetUpdate() % config.PRINT_INTERVAL()) || (GetUpdate() == config.MAX_GENS()) || (GetUpdate() <= 1)) {
     // output this so we know where we are in terms of generations and fitness
     Org & org = *pop[elite_pos];
     Org & opt = *pop[opti_pos];
@@ -857,7 +930,7 @@ void DiagWorld::RecordData()
 
   // snapshot the phylogeny
   if ( !(GetUpdate() % config.SNAP_INTERVAL()) || (GetUpdate() == config.MAX_GENS()) ) {
-    sys_ptr->Snapshot(config.OUTPUT_DIR() + "phylo_" + emp::to_string(GetUpdate()) + ".csv");
+    gen_sys_ptr->Snapshot(config.OUTPUT_DIR() + "phylo_" + emp::to_string(GetUpdate()) + ".csv");
   }
 
 }

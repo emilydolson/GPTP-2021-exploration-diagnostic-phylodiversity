@@ -36,7 +36,7 @@ class Org
     }
 
     // every org after starting generation
-    Org(genome_t _g)
+    Org(const genome_t & _g)
     {
       // make sure we aren't seeing anything weird
       emp_assert(genome.size() == 0); emp_assert(M == 0);
@@ -76,7 +76,7 @@ class Org
     // Are we optimized at this objective?
     bool OptimizedAt(const size_t obj);
     // get scored bool
-    bool GetScored() {return scored;}
+    bool GetScored() const {return scored;}
     // get optimal bool
     bool GetOpti() {return opti;}
     // get aggregated bool

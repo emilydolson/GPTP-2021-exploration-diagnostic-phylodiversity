@@ -15,3 +15,6 @@ pyenv/
 # vscode config
 .vscode/
 
+# Scratch files
+scratch.md
+

@@ -10,6 +10,7 @@
 
 ///< empirical headers
 #include "emp/Evolve/World.hpp"
+#include "emp/Evolve/Resource.hpp"
 #include "emp/math/Random.hpp"
 #include "emp/math/random_utils.hpp"
 
@@ -191,6 +192,7 @@ class DiagWorld : public emp::World<Org>
 
     void NoveltyLexicase();
 
+    void EcoEA();
 
     ///< evaluation function implementations
 
@@ -283,6 +285,9 @@ class DiagWorld : public emp::World<Org>
     size_t opti_pos;
     // common solution dictionary
     como_t common;
+
+    emp::vector<emp::Resource> ecoea_resources;
+    emp::vector<std::function<double(Org&)>> ecoea_fitset;
 };
 
 ///< functions called to setup the world
@@ -436,6 +441,10 @@ void DiagWorld::SetSelection()
 
     case 7: // novelty epsilon lexicase selection
       NoveltyLexicase();
+      break;
+
+    case 8:
+      EcoEA();
       break;
 
     default:
@@ -1202,6 +1211,119 @@ void DiagWorld::NoveltyLexicase()
   };
 
   std::cerr << "Novelty Lexicase selection scheme set!" << std::endl;
+}
+
+void DiagWorld::EcoEA()
+{
+  std::cerr << "Setting up selection scheme: EcoEA" << std::endl;
+
+  // Setup ecoea_fitset
+  ecoea_fitset.clear();
+  for (size_t obj_i = 0; obj_i < config.OBJECTIVE_CNT(); ++obj_i) {
+    ecoea_fitset.push_back(
+      [this, obj_i](Org & org) {
+        return org.GetScore()[obj_i];
+      }
+    );
+  }
+  // Setup ecoea resources
+  ecoea_resources.clear();
+  for (size_t res_i = 0; res_i < ecoea_fitset.size(); ++res_i) {
+    ecoea_resources.push_back(
+      emp::Resource(
+        config.RESOURCE_SELECT_RES_INFLOW(),
+        config.RESOURCE_SELECT_RES_INFLOW(),
+        config.RESOURCE_SELECT_RES_OUTFLOW()
+      )
+    );
+  }
+
+  // satisfy requirement for world to have base fitness function
+  SetFitFun(
+    [this](Org & org) {
+      return org.GetAggregate();
+    }
+  );
+
+  // emp::ResourceSelect(*this, fit_set, resources, TOURNAMENT_SIZE, POP_SIZE, RESOURCE_SELECT_FRAC, RESOURCE_SELECT_MAX_BONUS,RESOURCE_SELECT_COST, true, RESOURCE_SELECT_NICHE_WIDTH);
+  select = [this]() {
+    // @AML: This is implemented by ripping internals of emp::ResourceSelect out and dumping here (to play nice w/fact that selection should just return parent ids instead of handing reproduction).
+    //       Trying to make minimal number of changes.
+    emp::vector< std::function<double(Org &)> > & extra_funs = ecoea_fitset;
+    emp::vector<emp::Resource> & pools = ecoea_resources; // TODO
+    size_t t_size = config.TOUR_SIZE();
+    size_t tourny_count = config.POP_SIZE();
+    double frac = config.RESOURCE_SELECT_FRAC();
+    double max_bonus = config.RESOURCE_SELECT_MAX_BONUS();
+    double cost = config.RESOURCE_SELECT_COST();
+    bool use_base = true;
+    double min_score = config.RESOURCE_SELECT_NICHE_WIDTH();
+
+    emp_assert(GetFitFun(), "Must define a base fitness function");
+    emp_assert(GetSize() > 0);
+    emp_assert(t_size > 0, t_size);
+
+    // Setup info to track fitnesses.
+    emp::vector<double> base_fitness(GetSize());
+    emp::vector< emp::vector<double> > extra_fitnesses(extra_funs.size());
+    for (size_t i=0; i < extra_funs.size(); i++) {
+      extra_fitnesses[i].resize(GetSize());
+    }
+
+    // Collect all fitness info.
+    for (size_t org_id = 0; org_id < GetSize(); org_id++) {
+      if (!IsOccupied(org_id)) {
+          continue;
+      }
+      if (use_base) {
+        base_fitness[org_id] = CalcFitnessID(org_id);
+      } else {
+        base_fitness[org_id] = 0;
+      }
+
+      for (size_t ex_id = 0; ex_id < extra_funs.size(); ex_id++) {
+        pools[ex_id].Inc(pools[ex_id].GetInflow()/GetNumOrgs());
+        double cur_fit = extra_funs[ex_id](GetOrg(org_id));
+        cur_fit = emp::Pow(cur_fit, 2.0);
+        cur_fit *= frac*(pools[ex_id].GetAmount()-cost);
+        if (cur_fit > min_score) {
+            cur_fit -= cost;
+        } else {
+            cur_fit = 0;
+        }
+        cur_fit = std::min(cur_fit, max_bonus);
+        extra_fitnesses[ex_id][org_id] = emp::Pow2(cur_fit);
+        base_fitness[org_id] *= emp::Pow2(cur_fit);
+        pools[ex_id].Dec(std::abs(cur_fit));
+      }
+    }
+
+    emp::vector<size_t> entries;
+    ids_t parents(pop.size()); // <- to play nice with other selection schemes
+
+    for (size_t T = 0; T < tourny_count; T++) {
+      entries.resize(0);
+      for (size_t i=0; i<t_size; i++) entries.push_back( GetRandomOrgID() ); // Allows replacement!
+
+      double best_fit = base_fitness[entries[0]];
+      size_t best_id = entries[0];
+
+      // Search for a higher fit org in the tournament.
+      for (size_t i = 1; i < t_size; i++) {
+        const double cur_fit = base_fitness[entries[i]];
+        if (cur_fit > best_fit) {
+          best_fit = cur_fit;
+          best_id = entries[i];
+        }
+      }
+
+      // Place the highest fitness into the next generation!
+      // world.DoBirth( world.GetGenomeAt(best_id), best_id, 1 );
+      parents[T] = best_id;
+    }
+
+    return parents; // play nice with other selection schemes
+  };
 }
 
 ///< evaluation function implementations

@@ -33,6 +33,13 @@ EMP_BUILD_CONFIG(DiaConfig,
   VALUE(DSLEX_PROP,       double,           1.0,       "Parameter for down sampled proportion"),
   VALUE(COH_LEX_PROP,     double,           1.0,       "Parameter for cohort proportions"),
 
+  VALUE(RESOURCE_SELECT_RES_INFLOW, double, 50.0, "Resource in-flow (amount)"),
+  VALUE(RESOURCE_SELECT_RES_OUTFLOW, double, 0.05, "Resource out-flow (rate)"),
+  VALUE(RESOURCE_SELECT_FRAC, double, 0.0025, "Fraction of resource consumed."),
+  VALUE(RESOURCE_SELECT_MAX_BONUS, double, 5.0, "What's the max bonus someone can get for consuming a resource?"),
+  VALUE(RESOURCE_SELECT_COST, double, 0.0, "Cost of using a resource?"),
+  VALUE(RESOURCE_SELECT_NICHE_WIDTH, double, 0.0, "Score necessary to count as attempting to use a resource"),
+
   GROUP(OUTPUT, "Output parameter."),
   VALUE(SNAP_INTERVAL,             size_t,             1000,          "How many updates between prints?"),
   VALUE(DATA_INTERVAL,             size_t,                10,          "How many updates between writing data to file?"),

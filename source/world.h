@@ -568,13 +568,13 @@ void DiagWorld::SetDataTracking()
   // @AML: had to hack this recalculation in to allow world to manage updates to the phenotype systematics
   phen_sys_ptr = emp::NewPtr<phen_systematics_t>(
     [this](const Org & o) {
-      if (!o.GetScored()) {
-        Org sys_org(o);
-        evaluate(sys_org);
-        return sys_org.GetScore();
-      } else {
-        return o.GetScore();
-      }
+      Org sys_org(o);
+      evaluate(sys_org);
+      return sys_org.GetScore();
+      // if (!o.GetScored()) {
+      // } else {
+      //   return o.GetScore();
+      // }
     }
   );
 

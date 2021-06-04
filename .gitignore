@@ -1,6 +1,9 @@
 # Executables
 dia_world
 
+# Local configuration files
+Dia.cfg
+
 # Data files
 *.csv
 data/

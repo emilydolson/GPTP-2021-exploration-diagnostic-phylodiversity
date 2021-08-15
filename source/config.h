@@ -33,6 +33,7 @@ EMP_BUILD_CONFIG(DiaConfig,
   VALUE(DSLEX_PROP,       double,           1.0,       "Parameter for down sampled proportion"),
   VALUE(COH_LEX_PROP,     double,           1.0,       "Parameter for cohort proportions"),
 
+  VALUE(RESOURCE_SELECT_INITIAL_RES, double, 50.0, "Amount of resource initially in the environment"),
   VALUE(RESOURCE_SELECT_RES_INFLOW, double, 50.0, "Resource in-flow (amount)"),
   VALUE(RESOURCE_SELECT_RES_OUTFLOW, double, 0.05, "Resource out-flow (rate)"),
   VALUE(RESOURCE_SELECT_FRAC, double, 0.0025, "Fraction of resource consumed."),

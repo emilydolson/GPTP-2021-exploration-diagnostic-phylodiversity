@@ -1,5 +1,4 @@
-
-import argparse, os, copy, errno, csv, re, sys
+import argparse, os, copy, errno, csv, re, sys, itertools
 
 run_dir_identifier = "RUN_"
 
@@ -29,29 +28,64 @@ SELECTION_SCHEME_MAP = {
     "4":"EpsilonLexicase",
     "5":"DownSampledLexicase",
     "6":"CohortLexicase",
-    "7":"NoveltyLexicase"
+    "7":"NoveltyLexicase",
+    "8":"EcoEa"
 }
 
-"""
-This is functionally equivalent to the mkdir -p [fname] bash command
-"""
+
 def mkdir_p(path):
+    """
+    This is functionally equivalent to the mkdir -p [fname] bash command
+    """
     try:
         os.makedirs(path)
-    except OSError as exc: # Python >2.5
+    except OSError as exc:  # Python >2.5
         if exc.errno == errno.EEXIST and os.path.isdir(path):
             pass
-        else: raise
+        else:
+            raise
+
 
 def read_csv(file_path):
     content = None
     with open(file_path, "r") as fp:
         content = fp.read().strip().split("\n")
     header = content[0].split(",")
+    if "update" in header:
+        header[header.index("update")] = "gen"
+    elif "generation" in header:
+        header[header.index("generation")] = "gen"
+
+    if "phenotype" in file_path:
+        for i in range(len(header)):
+            if header[i] != "gen":
+                header[i] = "phen_" + header[i]
+
+    if "genotype" in file_path:
+        for i in range(len(header)):
+            if header[i] != "gen":
+                header[i] = "gen_" + header[i]
+
     # header_lu = {header[i].strip():i for i in range(0, len(header))}
     content = content[1:]
     lines = [{header[i]: l[i] for i in range(len(header))} for l in csv.reader(content, quotechar='"', delimiter=',', quoting=csv.QUOTE_ALL, skipinitialspace=True)]
     return lines
+
+
+def merge_data(data_list):
+    #print(data_list)
+    data_list.sort(key=lambda x: x["gen"])
+    data = []
+    for k, g in itertools.groupby(data_list, key=lambda x: x["gen"]):
+        full_line = {}
+        for line in g:
+            full_line |= line
+
+        data.append(full_line)
+
+    return data
+
+
 
 """
 Given the path to a run's config file, extract the run's settings.
@@ -117,6 +151,9 @@ def main():
         print(f"Extracting information from {run}")
         run_config_path = os.path.join(run, "run_config.csv")
         data_path = os.path.join(run, "data.csv")
+        phylodiversity_path = os.path.join(run, "phylodiversity.csv")
+        gene_systematics_path = os.path.join(run, "genotype_systematics.csv")
+        phen_systematics_path = os.path.join(run, "phenotype_systematics.csv")
 
         # does the run config file exist?
         if not os.path.exists(run_config_path):
@@ -127,6 +164,22 @@ def main():
         if not os.path.exists(data_path):
             print(f"Failed to find data file ({data_path})")
             exit(-1)
+
+        # does the phylodiversity file exist?
+        if not os.path.exists(phylodiversity_path):
+            print(f"Failed to find phylodiversity file ({phylodiversity_path})")
+            exit(-1)
+
+        # does the genotype systematics file exist?
+        if not os.path.exists(gene_systematics_path):
+            print(f"Failed to find genotype_systematics file ({gene_systematics_path})")
+            exit(-1)
+
+        # does the phenotype systematics file exist?
+        if not os.path.exists(phen_systematics_path):
+            print(f"Failed to find phenotype_systematics file ({phen_systematics_path})")
+            exit(-1)
+
 
         # extract run settings
         run_settings = extract_settings(run_config_path)
@@ -142,6 +195,13 @@ def main():
 
         # extract data file
         data = read_csv(data_path)
+
+        #print(data)
+        phylodiversity_data = read_csv(phylodiversity_path)
+        gene_sys_data = read_csv(gene_systematics_path)
+        phen_sys_data = read_csv(phen_systematics_path)
+
+        data = merge_data(data + phylodiversity_data + gene_sys_data + phen_sys_data)
 
         # is run finished?
         gens_in_data = {int(line["gen"]) for line in data}
@@ -180,8 +240,13 @@ def main():
         # add fields to info
         for line in data:
             info = {}
-            for field in data_fields: info[field] = line[field]
-            for field in config_fields: info[field] = run_settings[field]
+            for field in data_fields:
+                if field in line:
+                    info[field] = line[field]
+                else:
+                    info[field] = ""
+            for field in config_fields: 
+                info[field] = run_settings[field]
             time_series_info.append(",".join([str(info[field]) for field in fields]))
         print(f"  Time points: {len(data)}")
 

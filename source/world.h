@@ -935,6 +935,10 @@ void DiagWorld::RecordData()
     Org & org = *pop[elite_pos];
     Org & opt = *pop[opti_pos];
     std::cout << "gen=" << GetUpdate() << ", max_fit=" << org.GetAggregate()  << ", max_opt=" << opt.GetCount() << std::endl;
+    for (emp::Resource & res : ecoea_resources) {
+      std::cout << res.GetAmount() << " ";
+    }
+    std::cout << std::endl;
   }
 
   // snapshot the phylogeny
@@ -1222,7 +1226,7 @@ void DiagWorld::EcoEA()
   for (size_t obj_i = 0; obj_i < config.OBJECTIVE_CNT(); ++obj_i) {
     ecoea_fitset.push_back(
       [this, obj_i](Org & org) {
-        return org.GetScore()[obj_i];
+        return org.GetScore()[obj_i]/config.TARGET();
       }
     );
   }
@@ -1231,7 +1235,7 @@ void DiagWorld::EcoEA()
   for (size_t res_i = 0; res_i < ecoea_fitset.size(); ++res_i) {
     ecoea_resources.push_back(
       emp::Resource(
-        config.RESOURCE_SELECT_RES_INFLOW(),
+        config.RESOURCE_SELECT_INITIAL_RES(),
         config.RESOURCE_SELECT_RES_INFLOW(),
         config.RESOURCE_SELECT_RES_OUTFLOW()
       )
@@ -1282,19 +1286,22 @@ void DiagWorld::EcoEA()
       }
 
       for (size_t ex_id = 0; ex_id < extra_funs.size(); ex_id++) {
-        pools[ex_id].Inc(pools[ex_id].GetInflow()/GetNumOrgs());
-        double cur_fit = extra_funs[ex_id](GetOrg(org_id));
-        cur_fit = emp::Pow(cur_fit, 2.0);
-        cur_fit *= frac*(pools[ex_id].GetAmount()-cost);
-        if (cur_fit > min_score) {
-            cur_fit -= cost;
-        } else {
-            cur_fit = 0;
-        }
-        cur_fit = std::min(cur_fit, max_bonus);
-        extra_fitnesses[ex_id][org_id] = emp::Pow2(cur_fit);
-        base_fitness[org_id] *= emp::Pow2(cur_fit);
-        pools[ex_id].Dec(std::abs(cur_fit));
+          pools[ex_id].Inc(pools[ex_id].GetInflow()/GetNumOrgs());
+          pools[ex_id].Dec((pools[ex_id].GetAmount() * pools[ex_id].GetOutflow())/GetNumOrgs());
+          double cur_fit = extra_funs[ex_id](GetOrg(org_id));
+          if (cur_fit > min_score) {
+              cur_fit = emp::Pow(cur_fit, 2.0);
+              cur_fit *= frac*(pools[ex_id].GetAmount());
+              if (cur_fit > pools[ex_id].GetAmount()) {
+                  cur_fit = cost * -1;
+              }
+              cur_fit = std::min(cur_fit, max_bonus);
+              pools[ex_id].Dec(std::abs(cur_fit));
+          } else {
+              cur_fit = 0;
+          }
+          extra_fitnesses[ex_id][org_id] = emp::Pow2(cur_fit);
+          base_fitness[org_id] *= emp::Pow2(cur_fit);
       }
     }
 

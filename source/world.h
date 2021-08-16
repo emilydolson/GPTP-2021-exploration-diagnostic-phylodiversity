@@ -1269,10 +1269,10 @@ void DiagWorld::EcoEA()
 
     // Setup info to track fitnesses.
     emp::vector<double> base_fitness(GetSize());
-    emp::vector< emp::vector<double> > extra_fitnesses(extra_funs.size());
-    for (size_t i=0; i < extra_funs.size(); i++) {
-      extra_fitnesses[i].resize(GetSize());
-    }
+    // emp::vector< emp::vector<double> > extra_fitnesses(extra_funs.size());
+    // for (size_t i=0; i < extra_funs.size(); i++) {
+    //   extra_fitnesses[i].resize(GetSize());
+    // }
 
     // Collect all fitness info.
     for (size_t org_id = 0; org_id < GetSize(); org_id++) {
@@ -1286,21 +1286,26 @@ void DiagWorld::EcoEA()
       }
 
       for (size_t ex_id = 0; ex_id < extra_funs.size(); ex_id++) {
-          pools[ex_id].Inc(pools[ex_id].GetInflow()/GetNumOrgs());
-          pools[ex_id].Dec((pools[ex_id].GetAmount() * pools[ex_id].GetOutflow())/GetNumOrgs());
+          pools[ex_id].Inc(pools[ex_id].GetInflow()/(double)GetNumOrgs());
+          pools[ex_id].Dec((pools[ex_id].GetAmount() * pools[ex_id].GetOutflow())/(double)GetNumOrgs());
           double cur_fit = extra_funs[ex_id](GetOrg(org_id));
-          if (cur_fit > min_score) {
-              cur_fit = emp::Pow(cur_fit, 2.0);
+          // bool output = false;
+          // if (cur_fit > 0) {output=true; std::cout << "curfit: " << cur_fit << " amount: " << pools[ex_id].GetAmount() << std::endl;}
+          if (cur_fit >= min_score) {
+              cur_fit = emp::Pow(cur_fit, .5);
               cur_fit *= frac*(pools[ex_id].GetAmount());
               if (cur_fit > pools[ex_id].GetAmount()) {
                   cur_fit = cost * -1;
               }
               cur_fit = std::min(cur_fit, max_bonus);
               pools[ex_id].Dec(std::abs(cur_fit));
+              // if (output) {
+              //   std::cout << "Dec-ed " << std::abs(cur_fit) << " from " << ex_id << " now " << pools[ex_id].GetAmount() <<std::endl;
+              // }
           } else {
               cur_fit = 0;
           }
-          extra_fitnesses[ex_id][org_id] = emp::Pow2(cur_fit);
+          // extra_fitnesses[ex_id][org_id] = emp::Pow2(cur_fit);
           base_fitness[org_id] *= emp::Pow2(cur_fit);
       }
     }

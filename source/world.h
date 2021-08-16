@@ -1294,11 +1294,13 @@ void DiagWorld::EcoEA()
           if (cur_fit >= min_score) {
               cur_fit = emp::Pow(cur_fit, .5);
               cur_fit *= frac*(pools[ex_id].GetAmount());
-              if (cur_fit > pools[ex_id].GetAmount()) {
+              if (pools[ex_id].GetAmount() < 1) {
                   cur_fit = cost * -1;
+              } else {
+                pools[ex_id].Dec(std::abs(cur_fit));
               }
               cur_fit = std::min(cur_fit, max_bonus);
-              pools[ex_id].Dec(std::abs(cur_fit));
+
               // if (output) {
               //   std::cout << "Dec-ed " << std::abs(cur_fit) << " from " << ex_id << " now " << pools[ex_id].GetAmount() <<std::endl;
               // }

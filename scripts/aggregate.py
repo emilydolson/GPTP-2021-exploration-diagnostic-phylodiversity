@@ -1,4 +1,3 @@
-
 import argparse, os, copy, errno, csv, re, sys, itertools
 
 run_dir_identifier = "RUN_"
@@ -85,6 +84,7 @@ def merge_data(data_list):
         data.append(full_line)
 
     return data
+
 
 
 """
@@ -195,12 +195,14 @@ def main():
 
         # extract data file
         data = read_csv(data_path)
+
         #print(data)
         phylodiversity_data = read_csv(phylodiversity_path)
         gene_sys_data = read_csv(gene_systematics_path)
         phen_sys_data = read_csv(phen_systematics_path)
 
         data = merge_data(data + phylodiversity_data + gene_sys_data + phen_sys_data)
+
         # is run finished?
         gens_in_data = {int(line["gen"]) for line in data}
         if not max_gen in gens_in_data:

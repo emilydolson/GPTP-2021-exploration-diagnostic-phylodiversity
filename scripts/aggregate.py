@@ -219,6 +219,7 @@ def main():
             )
             line["selection_name"] = selection_name
             line["test_sample_prop"] = test_sample_prop
+            line["directory"] = run
             line_keys = line.keys()
 
         # filter data to appropriate resolution

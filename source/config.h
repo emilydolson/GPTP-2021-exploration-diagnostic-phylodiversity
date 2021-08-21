@@ -40,6 +40,7 @@ EMP_BUILD_CONFIG(DiaConfig,
   VALUE(RESOURCE_SELECT_MAX_BONUS, double, 5.0, "What's the max bonus someone can get for consuming a resource?"),
   VALUE(RESOURCE_SELECT_COST, double, 0.0, "Cost of using a resource?"),
   VALUE(RESOURCE_SELECT_NICHE_WIDTH, double, 0.0, "Score necessary to count as attempting to use a resource"),
+  VALUE(RESOURCE_SELECT_SCORE_EXPONENT, double, 1.0, "Power to raise score to"),
 
   GROUP(OUTPUT, "Output parameter."),
   VALUE(SNAP_INTERVAL,             size_t,             1000,          "How many updates between prints?"),

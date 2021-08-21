@@ -542,26 +542,26 @@ void DiagWorld::SetDataTracking()
   std::cerr << "Setting up systematics tracking..." << std::endl;
 
   // -- GENOTYPE SYSTEMATICS --
-  gen_sys_ptr = emp::NewPtr<gen_systematics_t>([](const Org & o) { return o.GetGenome(); });
+  // gen_sys_ptr = emp::NewPtr<gen_systematics_t>([](const Org & o) { return o.GetGenome(); });
 
-  gen_sys_ptr->AddSnapshotFun([](const gen_taxon_t & taxon) {
-    return emp::to_string(taxon.GetData().GetFitness());
-  }, "fitness", "Taxon fitness");
+  // gen_sys_ptr->AddSnapshotFun([](const gen_taxon_t & taxon) {
+  //   return emp::to_string(taxon.GetData().GetFitness());
+  // }, "fitness", "Taxon fitness");
 
-  gen_sys_ptr->AddSnapshotFun([](const gen_taxon_t & taxon) {
-    return emp::ToString(taxon.GetData().GetPhenotype());
-  }, "phenotype", "Taxon Phenotype");
+  // gen_sys_ptr->AddSnapshotFun([](const gen_taxon_t & taxon) {
+  //   return emp::ToString(taxon.GetData().GetPhenotype());
+  // }, "phenotype", "Taxon Phenotype");
 
-  gen_sys_ptr->AddSnapshotFun([](const gen_taxon_t & taxon) {
-    return emp::ToString(taxon.GetInfo());
-  }, "genotype", "Taxon Genotype");
+  // gen_sys_ptr->AddSnapshotFun([](const gen_taxon_t & taxon) {
+  //   return emp::ToString(taxon.GetInfo());
+  // }, "genotype", "Taxon Genotype");
 
-  gen_sys_ptr->AddEvolutionaryDistinctivenessDataNode();
-  gen_sys_ptr->AddPairwiseDistanceDataNode();
-  gen_sys_ptr->AddPhylogeneticDiversityDataNode();
+  // gen_sys_ptr->AddEvolutionaryDistinctivenessDataNode();
+  // gen_sys_ptr->AddPairwiseDistanceDataNode();
+  // gen_sys_ptr->AddPhylogeneticDiversityDataNode();
 
-  AddSystematics(gen_sys_ptr, "genotype");
-  SetupSystematicsFile("genotype", config.OUTPUT_DIR() + "genotype_systematics.csv").SetTimingRepeat(config.DATA_INTERVAL());
+  // AddSystematics(gen_sys_ptr, "genotype");
+  // SetupSystematicsFile("genotype", config.OUTPUT_DIR() + "genotype_systematics.csv").SetTimingRepeat(config.DATA_INTERVAL());
 
 
   // -- PHENOTYPE SYSTEMATICS --
@@ -578,6 +578,18 @@ void DiagWorld::SetDataTracking()
     }
   );
 
+  phen_sys_ptr->AddSnapshotFun([](const phen_taxon_t & taxon) {
+    return emp::to_string(taxon.GetData().GetFitness());
+  }, "fitness", "Taxon fitness");
+
+  phen_sys_ptr->AddSnapshotFun([](const phen_taxon_t & taxon) {
+    return emp::ToString(taxon.GetData().GetPhenotype());
+  }, "phenotype", "Taxon Phenotype");
+
+  phen_sys_ptr->AddSnapshotFun([](const phen_taxon_t & taxon) {
+    return emp::ToString(taxon.GetInfo());
+  }, "genotype", "Taxon Genotype");
+
   phen_sys_ptr->AddEvolutionaryDistinctivenessDataNode();
   phen_sys_ptr->AddPairwiseDistanceDataNode();
   phen_sys_ptr->AddPhylogeneticDiversityDataNode();
@@ -587,9 +599,9 @@ void DiagWorld::SetDataTracking()
 
   // -- PHYLODIVERSITY DATA FILE --
   phylodiversity_file.AddVar(update, "generation", "Generation");
-  phylodiversity_file.AddStats(*gen_sys_ptr->GetDataNode("evolutionary_distinctiveness") , "genotype_evolutionary_distinctiveness", "evolutionary distinctiveness for a single update", true, true);
-  phylodiversity_file.AddStats(*gen_sys_ptr->GetDataNode("pairwise_distance"), "genotype_pairwise_distance", "pairwise distance for a single update", true, true);
-  phylodiversity_file.AddCurrent(*gen_sys_ptr->GetDataNode("phylogenetic_diversity"), "genotype_current_phylogenetic_diversity", "current phylogenetic_diversity", true, true);
+  // phylodiversity_file.AddStats(*gen_sys_ptr->GetDataNode("evolutionary_distinctiveness") , "genotype_evolutionary_distinctiveness", "evolutionary distinctiveness for a single update", true, true);
+  // phylodiversity_file.AddStats(*gen_sys_ptr->GetDataNode("pairwise_distance"), "genotype_pairwise_distance", "pairwise distance for a single update", true, true);
+  // phylodiversity_file.AddCurrent(*gen_sys_ptr->GetDataNode("phylogenetic_diversity"), "genotype_current_phylogenetic_diversity", "current phylogenetic_diversity", true, true);
   phylodiversity_file.AddStats(*phen_sys_ptr->GetDataNode("evolutionary_distinctiveness") , "phenotype_evolutionary_distinctiveness", "evolutionary distinctiveness for a single update", true, true);
   phylodiversity_file.AddStats(*phen_sys_ptr->GetDataNode("pairwise_distance"), "phenotype_pairwise_distance", "pairwise distance for a single update", true, true);
   phylodiversity_file.AddCurrent(*phen_sys_ptr->GetDataNode("phylogenetic_diversity"), "phenotype_current_phylogenetic_diversity", "current phylogenetic_diversity", true, true);
@@ -803,9 +815,9 @@ void DiagWorld::PopulateWorld()
   evaluate(ancestor);
 
   // Record fitness/phenotype information for systematics tracking
-  emp::Ptr<gen_taxon_t> gen_taxon = gen_sys_ptr->GetTaxonAt(0);
-  gen_taxon->GetData().RecordFitness(ancestor.GetAggregate());
-  gen_taxon->GetData().RecordPhenotype(ancestor.GetScore());
+  // emp::Ptr<gen_taxon_t> gen_taxon = gen_sys_ptr->GetTaxonAt(0);
+  // gen_taxon->GetData().RecordFitness(ancestor.GetAggregate());
+  // gen_taxon->GetData().RecordPhenotype(ancestor.GetScore());
 
   emp::Ptr<phen_taxon_t> phen_taxon = phen_sys_ptr->GetTaxonAt(0);
   phen_taxon->GetData().RecordFitness(ancestor.GetAggregate());
@@ -858,9 +870,9 @@ void DiagWorld::EvaluationStep()
     fit_vec[i] = evaluate(org);
 
     // Record fitness/phenotype information for systematics tracking
-    emp::Ptr<gen_taxon_t> gen_taxon = gen_sys_ptr->GetTaxonAt(i);
-    gen_taxon->GetData().RecordFitness(org.GetAggregate());
-    gen_taxon->GetData().RecordPhenotype(org.GetScore());
+    // emp::Ptr<gen_taxon_t> gen_taxon = gen_sys_ptr->GetTaxonAt(i);
+    // gen_taxon->GetData().RecordFitness(org.GetAggregate());
+    // gen_taxon->GetData().RecordPhenotype(org.GetScore());
 
     emp::Ptr<phen_taxon_t> phen_taxon = phen_sys_ptr->GetTaxonAt(i);
     phen_taxon->GetData().RecordFitness(org.GetAggregate());
@@ -943,7 +955,7 @@ void DiagWorld::RecordData()
 
   // snapshot the phylogeny
   if ( !(GetUpdate() % config.SNAP_INTERVAL()) || (GetUpdate() == config.MAX_GENS()) ) {
-    gen_sys_ptr->Snapshot(config.OUTPUT_DIR() + "phylo_" + emp::to_string(GetUpdate()) + ".csv");
+    phen_sys_ptr->Snapshot(config.OUTPUT_DIR() + "phylo_" + emp::to_string(GetUpdate()) + ".csv");
   }
 
 }
@@ -1292,7 +1304,7 @@ void DiagWorld::EcoEA()
           // bool output = false;
           // if (cur_fit > 0) {output=true; std::cout << "curfit: " << cur_fit << " amount: " << pools[ex_id].GetAmount() << std::endl;}
           if (cur_fit >= min_score) {
-              cur_fit = emp::Pow(cur_fit, .5);
+              cur_fit = emp::Pow(cur_fit, config.RESOURCE_SELECT_SCORE_EXPONENT());
               cur_fit *= frac*(pools[ex_id].GetAmount());
               if (pools[ex_id].GetAmount() < 1) {
                   cur_fit = cost * -1;

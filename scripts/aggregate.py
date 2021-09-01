@@ -171,9 +171,9 @@ def main():
             exit(-1)
 
         # does the genotype systematics file exist?
-        if not os.path.exists(gene_systematics_path):
-            print(f"Failed to find genotype_systematics file ({gene_systematics_path})")
-            exit(-1)
+        #if not os.path.exists(gene_systematics_path):
+        #    print(f"Failed to find genotype_systematics file ({gene_systematics_path})")
+        #    exit(-1)
 
         # does the phenotype systematics file exist?
         if not os.path.exists(phen_systematics_path):
@@ -198,10 +198,11 @@ def main():
 
         #print(data)
         phylodiversity_data = read_csv(phylodiversity_path)
-        gene_sys_data = read_csv(gene_systematics_path)
+        #gene_sys_data = read_csv(gene_systematics_path)
         phen_sys_data = read_csv(phen_systematics_path)
 
-        data = merge_data(data + phylodiversity_data + gene_sys_data + phen_sys_data)
+        #data = merge_data(data + phylodiversity_data + gene_sys_data + phen_sys_data)
+        data = merge_data(data + phylodiversity_data + phen_sys_data)
 
         # is run finished?
         gens_in_data = {int(line["gen"]) for line in data}

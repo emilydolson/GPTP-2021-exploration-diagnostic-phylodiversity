@@ -1,0 +1,827 @@
+---
+title: "Phylogenetic diversity in the exploration diagnostic - GPTP 2021"
+author: "Emily Dolson"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+# Setup
+
+```{r, setupknitr, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(cache = TRUE, warning = FALSE, 
+                      message = FALSE)
+```
+
+```{r, dependencies, message=FALSE, cache=FALSE, warning=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(knitr)
+library(cowplot)
+library(viridis)
+library(RColorBrewer)
+library(rstatix)
+library(ggsignif)
+library(Hmisc)
+library(kableExtra)
+source("https://gist.githubusercontent.com/benmarwick/2a1bb0133ff568cbe28d/raw/fb53bd97121f7f9ce947837ef1a4c65a73bffb3f/geom_flat_violin.R")
+library(readr)
+library(stringr)
+library(ggpubr)
+library(infotheo)
+```
+
+These analyses were conducted in the following computing environment:
+
+```{r, version_info}
+print(version)
+```
+
+```{r, settings, cache=FALSE}
+
+# Labeler for stats annotations
+p_label <- function(p_value) {
+  threshold = 0.0001
+  if (p_value < threshold) {
+    return(paste0("p < ", threshold))
+  } else {
+    return(paste0("p = ", p_value))
+  }
+}
+
+# Significance threshold
+alpha <- 0.05
+
+# Common graph variables
+performance_ylim <- 1
+coverage_ylim <- 1.0
+
+####### misc #######
+# Configure our default graphing theme
+theme_set(theme_cowplot())
+```
+
+```{r, data_import, message=FALSE, cache=TRUE, warning=FALSE, cache.lazy = FALSE}
+#data_loc <- "../high_n_timeseries.csv"
+#data_loc <- "~/repos/GPTP-2021-exploration-diagnostic-phylodiversity/high_n_timeseries.csv"
+data_loc <- "../long_timeseries.csv"
+
+data <- read_csv(data_loc, na=c("NONE", "NA", ""))
+
+data <- data %>% mutate(selection_name = as.factor(case_when(
+  selection_name == "EpsilonLexicase" ~ "Lexicase",
+  TOUR_SIZE == 1 ~ "Random",
+  selection_name == "Tournament" ~ "Tournament",
+  selection_name == "FitnessSharing" ~ "Fitness Sharing",
+  selection_name == "EcoEa" ~ "EcoEA"
+)))
+
+data$elite_trait_avg <-
+  data$ele_agg_per / data$OBJECTIVE_CNT
+data$unique_start_positions_coverage <-
+  data$uni_str_pos / data$OBJECTIVE_CNT
+
+data$elite_trait_avg <- data$elite_trait_avg/data$TARGET
+
+final_data <- filter(data, evaluations==max(data$evaluations))
+
+```
+
+
+
+# Performance
+
+
+## Over time
+
+#### Trait performance
+
+```{r, performance_over_time, message=FALSE, cache=TRUE, warning=FALSE, cache.lazy=FALSE}
+ggplot(
+    data,
+    aes(
+      x=gen,
+      y=elite_trait_avg,
+      color=selection_name,
+      fill=selection_name
+    )
+  ) +
+  stat_summary(geom="line", fun=mean) +
+  stat_summary(
+    geom="ribbon",
+    fun.data="mean_cl_boot",
+    fun.args=list(conf.int=0.95),
+    alpha=0.2,
+    linetype=0
+  ) +
+  scale_y_continuous(
+    name="Average trait performance",
+    limits=c(0, performance_ylim)
+  ) +
+  scale_x_continuous(
+    name="Generation"
+  ) +
+  scale_color_discrete("Selection") + scale_fill_discrete("Selection")
+```
+
+#### Activation position coverage
+
+```{r, activation_positions_over_time, message=FALSE, cache=TRUE, warning=FALSE, cache.lazy=FALSE}
+ggplot(data, aes(x=gen, y=uni_str_pos, color=selection_name, fill=selection_name)) +
+  stat_summary(geom="line", fun=mean) +
+  stat_summary(
+    geom="ribbon",
+    fun.data="mean_cl_boot",
+    fun.args=list(conf.int=0.95),
+    alpha=0.2,
+    linetype=0
+  ) +
+  scale_y_continuous(
+    name="Unique activation positions (population)",
+    limits=c(0, 100)
+  ) +
+  scale_x_continuous(
+    name="Generation"
+  ) +
+  scale_color_discrete("Selection")+
+  scale_fill_discrete("Selection")
+```
+
+Different cardinalities have numbers of possible starting positions, so next, we look at the proportion of starting positions (out of all possible) maintained by populations.
+
+```{r, unique_start_positions, message=FALSE, cache=TRUE, warning=FALSE, cache.lazy=FALSE}
+ggplot(
+    data,
+    aes(
+      x=gen,
+      y=unique_start_positions_coverage,
+      color=selection_name,
+      fill=selection_name
+    )
+  ) +
+  stat_summary(geom="line", fun=mean) +
+  stat_summary(
+    geom="ribbon",
+    fun.data="mean_cl_boot",
+    fun.args=list(conf.int=0.95),
+    alpha=0.2,
+    linetype=0
+  ) +
+  scale_y_continuous(
+    name="Activation position coverage",
+    limit=c(0, coverage_ylim)
+  ) +
+  scale_x_continuous(
+    name="Generation"
+  ) +
+  scale_fill_discrete(
+    name="Selection"
+  ) +
+  scale_color_discrete(
+    name="Selection"
+  )
+```
+
+## Final 
+
+#### Trait performance
+
+```{r, final_performance_stats, message=FALSE, cache=TRUE, warning=FALSE}
+# Compute manual labels for geom_signif
+stat.test <- final_data %>%
+  wilcox_test(elite_trait_avg ~ selection_name) %>%
+  adjust_pvalue(method = "bonferroni") %>%
+  add_significance() %>%
+  add_xy_position(x="selection_name",step.increase=1)
+#stat.test$manual_position <- stat.test$y.position * .5
+#stat.test$manual_position <- c(110, 150, 170, 170, 130, 110)
+stat.test$label <- mapply(p_label,stat.test$p.adj)
+```
+
+```{r, final_performance_plot, message=FALSE, cache=TRUE, warning=FALSE}
+elite_final_performance_fig <- ggplot(
+    final_data,
+    aes(
+      x=selection_name,
+      y=elite_trait_avg,
+      fill=selection_name
+    )
+  ) +
+  geom_flat_violin(
+    position = position_nudge(x = .2, y = 0),
+    alpha = .8,
+    scale="width"
+  ) +
+  geom_point(
+    mapping=aes(color=selection_name),
+    position = position_jitter(width = .15),
+    size = .5,
+    alpha = 0.8
+  ) +
+  geom_boxplot(
+    width = .1,
+    outlier.shape = NA,
+    alpha = 0.5
+  ) +
+  scale_y_continuous(
+    name="Average trait performance",
+    limits=c(0, performance_ylim)
+  ) +
+  scale_x_discrete(
+    name="Selection"
+  ) +
+  scale_fill_discrete(
+    name="Selection"
+  ) +
+  scale_color_discrete(
+    name="Selection"
+  ) + 
+  theme(legend.position="none")
+elite_final_performance_fig
+```
+
+```{r, performance_stats_report, message=FALSE, cache=TRUE, warning=FALSE}
+stat.test %>%
+  kbl() %>%
+  kable_styling(
+    bootstrap_options = c(
+      "striped",
+      "hover",
+      "condensed",
+      "responsive"
+    )
+  ) %>%
+  scroll_box(width="600px")
+```
+
+
+
+#### Final activation position Coverage
+
+```{r, final_unique_start_positions_stats, message=FALSE, cache=TRUE, warning=FALSE}
+# Compute manual labels for geom_signif
+stat.test <- final_data %>%
+  wilcox_test(unique_start_positions_coverage ~ selection_name) %>%
+  adjust_pvalue(method = "bonferroni") %>%
+  add_significance() %>%
+  add_xy_position(x="selection_name",step.increase=1)
+stat.test$manual_position <- stat.test$y.position * 1.05
+stat.test$label <- mapply(p_label,stat.test$p.adj)
+```
+
+```{r,unique_start_positions_final, message=FALSE, cache=TRUE, warning=FALSE}
+unique_start_positions_coverage_final_fig <- ggplot(
+    final_data,
+    aes(
+      x=selection_name,
+      y=unique_start_positions_coverage,
+      fill=selection_name
+    )
+  ) +
+  geom_flat_violin(
+    position = position_nudge(x = .2, y = 0),
+    alpha = .8,
+    scale="width"
+  ) +
+  geom_point(
+    mapping=aes(color=selection_name),
+    position = position_jitter(width = .15),
+    size = .5,
+    alpha = 0.8
+  ) +
+  geom_boxplot(
+    width = .1,
+    outlier.shape = NA,
+    alpha = 0.5
+  ) +
+  scale_y_continuous(
+    name="Activation position coverage",
+    limits=c(0, coverage_ylim)
+  ) +
+  scale_x_discrete(
+    name="Selection"
+  ) +
+  scale_fill_discrete(
+    name="Selection"
+  ) +
+  scale_color_discrete(
+    name="Selection"
+  ) +
+  theme(
+    legend.position="none"
+  )
+unique_start_positions_coverage_final_fig
+```
+
+```{r, start_positions_stats_report, message=FALSE, cache=TRUE, warning=FALSE}
+stat.test %>%
+  kbl() %>%
+  kable_styling(
+    bootstrap_options = c(
+      "striped",
+      "hover",
+      "condensed",
+      "responsive"
+    )
+  ) %>%
+  scroll_box(width="600px")
+```
+
+
+# Phylogenetic diversity
+
+## Over time
+
+```{r, phylogeny_over_time_plot, message=FALSE, cache=TRUE, warning=FALSE, cache.lazy=FALSE}
+ggplot(
+    data,
+    aes(
+      x=gen,
+      y=mean_phenotype_pairwise_distance,
+      color=selection_name,
+      fill=selection_name
+    )
+  ) +
+  stat_summary(geom="line", fun=mean) +
+  stat_summary(
+    geom="ribbon",
+    fun.data="mean_cl_boot",
+    fun.args=list(conf.int=0.95),
+    alpha=0.2,
+    linetype=0
+  ) +
+  scale_y_log10(
+    name="Mean pairwise distance"
+  ) +
+  scale_x_continuous(
+    name="Generation"
+  ) +
+  scale_color_discrete("Selection") +
+  scale_fill_discrete("Selection")
+
+```
+
+## Final
+
+```{r, final_phylogeny_stats, message=FALSE, cache=TRUE, warning=FALSE}
+# Compute manual labels for geom_signif
+stat.test <- final_data %>%
+  wilcox_test(mean_phenotype_pairwise_distance ~ selection_name) %>%
+  adjust_pvalue(method = "bonferroni") %>%
+  add_significance() %>%
+  add_xy_position(x="selection_name",step.increase=1)
+#stat.test$manual_position <- stat.test$y.position * .5
+#stat.test$manual_position <- c(110, 150, 170, 170, 130, 110)
+stat.test$label <- mapply(p_label,stat.test$p.adj)
+```
+
+```{r, final_phylogeny_plot, message=FALSE, cache=TRUE, warning=FALSE}
+final_phylogeny_fig <- ggplot(
+    final_data,
+    aes(
+      x=selection_name,
+      y=mean_phenotype_pairwise_distance,
+      fill=selection_name
+    )
+  ) +
+  geom_flat_violin(
+    position = position_nudge(x = .2, y = 0),
+    alpha = .8,
+    scale="width"
+  ) +
+  geom_point(
+    mapping=aes(color=selection_name),
+    position = position_jitter(width = .15),
+    size = .5,
+    alpha = 0.8
+  ) +
+  geom_boxplot(
+    width = .1,
+    outlier.shape = NA,
+    alpha = 0.5
+  ) +
+  scale_y_log10(
+    name="Mean pairwise distance"
+  ) +
+  scale_x_discrete(
+    name="Selection"
+  ) +
+  scale_fill_discrete(
+    name="Selection"
+  ) +
+  scale_color_discrete(
+    name="Selection"
+  ) + 
+  theme(legend.position = "none")
+final_phylogeny_fig
+```
+
+```{r, phylogeny_stats_report, message=FALSE, cache=TRUE, warning=FALSE}
+stat.test %>%
+  kbl() %>%
+  kable_styling(
+    bootstrap_options = c(
+      "striped",
+      "hover",
+      "condensed",
+      "responsive"
+    )
+  ) %>%
+  scroll_box(width="600px")
+```
+
+
+
+# Phenotypic diversity
+
+## Over time
+
+```{r, phenotypic_diversity_over_time_plot, message=FALSE, cache=TRUE, warning=FALSE, cache.lazy=FALSE}
+ggplot(
+    data,
+    aes(
+      x=gen,
+      y=phen_num_taxa,
+      color=selection_name,
+      fill=selection_name
+    )
+  ) +
+  stat_summary(geom="line", fun=mean) +
+  stat_summary(
+    geom="ribbon",
+    fun.data="mean_cl_boot",
+    fun.args=list(conf.int=0.95),
+    alpha=0.2,
+    linetype=0
+  ) +
+  scale_y_continuous(
+    name="Phenotypic richness"
+  ) +
+  scale_x_continuous(
+    name="Generation"
+  ) +
+  scale_color_discrete("Selection") + 
+  scale_fill_discrete("Selection")
+
+```
+
+
+## Final
+
+```{r, final_phenotypic_stats, message=FALSE, cache=TRUE, warning=FALSE}
+# Compute manual labels for geom_signif
+stat.test <- final_data %>%
+  wilcox_test(phen_num_taxa ~ selection_name) %>%
+  adjust_pvalue(method = "bonferroni") %>%
+  add_significance() %>%
+  add_xy_position(x="selection_name",step.increase=1)
+#stat.test$manual_position <- stat.test$y.position * .5
+#stat.test$manual_position <- c(110, 150, 170, 170, 130, 110)
+stat.test$label <- mapply(p_label,stat.test$p.adj)
+```
+
+```{r, final_phenotypic_plot, message=FALSE, cache=TRUE, warning=FALSE}
+final_phenotypic_fig <- ggplot(
+    final_data,
+    aes(
+      x=selection_name,
+      y=phen_num_taxa,
+      fill=selection_name
+    )
+  ) +
+  geom_flat_violin(
+    position = position_nudge(x = .2, y = 0),
+    alpha = .8,
+    scale="width"
+  ) +
+  geom_point(
+    mapping=aes(color=selection_name),
+    position = position_jitter(width = .15),
+    size = .5,
+    alpha = 0.8
+  ) +
+  geom_boxplot(
+    width = .1,
+    outlier.shape = NA,
+    alpha = 0.5
+  ) +
+  scale_y_continuous(
+    name="Phenotypic Richness"
+  ) +
+  scale_x_discrete(
+    name="Selection"
+  ) +
+  scale_fill_discrete(
+    name="Selection"
+  ) +
+  scale_color_discrete(
+    name="Selection"
+  ) +
+  theme(legend.position = "none")
+final_phenotypic_fig
+```
+
+```{r, phenotypic_stats_report, message=FALSE, cache=TRUE, warning=FALSE}
+stat.test %>%
+  kbl() %>%
+  kable_styling(
+    bootstrap_options = c(
+      "striped",
+      "hover",
+      "condensed",
+      "responsive"
+    )
+  ) %>%
+  scroll_box(width="600px")
+```
+
+# Relationship between diversity and success
+
+## Earlier in run
+
+```{r, phylogeny_vs_performance_early, message=FALSE, cache=TRUE, warning=FALSE}
+phylogney_vs_performance <- ggplot(
+    data %>% filter(gen==50000),
+    aes(
+        y=elite_trait_avg,
+        x=mean_phenotype_pairwise_distance,
+        color=selection_name,
+        fill=selection_name
+    )
+  ) +
+  geom_point() +
+    scale_y_continuous(
+        name="Average trait performance"
+  ) +
+  scale_x_continuous(
+        name="Mean pairwise distance"
+  ) + 
+  facet_wrap(
+      ~selection_name, scales="free"
+  ) + 
+  stat_smooth(
+    method="lm"
+  ) + 
+  stat_cor(
+    method="spearman", cor.coef.name = "rho", color="black"
+  ) +
+  theme(legend.position = "none")
+  
+phylogney_vs_performance
+
+```
+
+```{r, richness_vs_performance_early, message=FALSE, cache=TRUE, warning=FALSE}
+richness_vs_performance <- ggplot(
+    data %>% filter(gen==50000),
+    aes(
+        y=elite_trait_avg,
+        x=phen_num_taxa,
+        color=selection_name,
+        fill=selection_name
+    )
+  ) +
+  geom_point() +
+    scale_y_continuous(
+        name="Average trait performance"
+  ) +
+  scale_x_continuous(
+        name="Phenotypic richness"
+  ) + 
+  facet_wrap(
+      ~selection_name, scales="free"
+  ) + 
+  stat_smooth(
+    method="lm"
+  ) + 
+  stat_cor(
+    method="spearman", cor.coef.name = "rho", color="black"
+  ) +
+  theme(legend.position = "none")
+  
+richness_vs_performance
+
+```
+
+## End of run
+
+```{r, phylogeny_vs_performance, message=FALSE, cache=TRUE, warning=FALSE}
+final_phylogney_vs_performance <- ggplot(
+    final_data,
+    aes(
+        y=elite_trait_avg,
+        x=mean_phenotype_pairwise_distance,
+        color=selection_name,
+        fill=selection_name
+    )
+  ) +
+  geom_point() +
+    scale_y_continuous(
+        name="Average trait performance"
+  ) +
+  scale_x_continuous(
+        name="Mean pairwise distance"
+  ) + 
+  facet_wrap(
+      ~selection_name, scales="free"
+  ) + 
+  stat_smooth(
+    method="lm"
+  ) + 
+  stat_cor(
+    method="spearman", cor.coef.name = "rho", color="black"
+  ) +
+  theme(legend.position = "none")
+  
+final_phylogney_vs_performance
+
+```
+
+```{r, richness_vs_performance, message=FALSE, cache=TRUE, warning=FALSE}
+final_richness_vs_performance <- ggplot(
+    final_data,
+    aes(
+        y=elite_trait_avg,
+        x=phen_num_taxa,
+        color=selection_name,
+        fill=selection_name
+    )
+  ) +
+  geom_point() +
+    scale_y_continuous(
+        name="Average trait performance"
+  ) +
+  scale_x_continuous(
+        name="Phenotypic richness"
+  ) + 
+  facet_wrap(
+      ~selection_name, scales="free"
+  ) + 
+  stat_smooth(
+    method="lm"
+  ) + 
+  stat_cor(
+    method="spearman", cor.coef.name = "rho", color="black"
+  ) +
+  theme(legend.position = "none")
+  
+final_richness_vs_performance
+
+```
+
+
+
+# Causality analysis
+
+```{r, message=FALSE, cache=TRUE, warning=FALSE}
+#res <- data %>% group_by(directory, selection_name) %>%
+#summarise(fit_phylo_100 = mutinformation(discretize(elite_trait_avg), discretize(lag(max_genotype_pairwise_distance, 100))),
+#fit_phylo_1000 = mutinformation(discretize(elite_trait_avg), discretize(lag(max_genotype_pairwise_distance, 1000))),
+#fit_phylo_2000 = mutinformation(discretize(elite_trait_avg), discretize(lag(max_genotype_pairwise_distance, 2000))),
+#fit_phylo_3000 = mutinformation(discretize(elite_trait_avg), discretize(lag(max_genotype_pairwise_distance, 3000))),
+#fit_phylo_4000 = mutinformation(discretize(elite_trait_avg), discretize(lag(max_genotype_pairwise_distance, 4000))),
+#fit_fit_100 = mutinformation(discretize(elite_trait_avg), discretize(lag(elite_trait_avg, 100))),
+#fit_fit_1000 = mutinformation(discretize(elite_trait_avg), discretize(lag(elite_trait_avg, 1000))),
+#fit_fit_2000 = mutinformation(discretize(elite_trait_avg), discretize(lag(elite_trait_avg, 2000))),
+#fit_fit_3000 = mutinformation(discretize(elite_trait_avg), discretize(lag(elite_trait_avg, 3000))),
+#fit_fit_4000 = mutinformation(discretize(elite_trait_avg), discretize(lag(elite_trait_avg, 4000)))
+#)
+
+res <- data %>% group_by(directory, selection_name) %>%
+summarise(fit_phylo_100 = mutinformation(discretize(elite_trait_avg), discretize(lag(max_phenotype_pairwise_distance, 100))),
+fit_phylo_1000 = mutinformation(discretize(elite_trait_avg), discretize(lag(max_phenotype_pairwise_distance, 1000))),
+fit_phylo_2000 = mutinformation(discretize(elite_trait_avg), discretize(lag(max_phenotype_pairwise_distance, 2000))),
+fit_phylo_3000 = mutinformation(discretize(elite_trait_avg), discretize(lag(max_phenotype_pairwise_distance, 3000))),
+fit_phylo_4000 = mutinformation(discretize(elite_trait_avg), discretize(lag(max_phenotype_pairwise_distance, 4000))),
+fit_fit_100 = mutinformation(discretize(elite_trait_avg), discretize(lag(elite_trait_avg, 100))),
+fit_fit_1000 = mutinformation(discretize(elite_trait_avg), discretize(lag(elite_trait_avg, 1000))),
+fit_fit_2000 = mutinformation(discretize(elite_trait_avg), discretize(lag(elite_trait_avg, 2000))),
+fit_fit_3000 = mutinformation(discretize(elite_trait_avg), discretize(lag(elite_trait_avg, 3000))),
+fit_fit_4000 = mutinformation(discretize(elite_trait_avg), discretize(lag(elite_trait_avg, 4000)))
+)
+
+```
+
+```{r, information_theory, message=FALSE, cache=TRUE, warning=FALSE}
+# res <- data %>% group_by(directory, selection_name) %>%
+# summarise(
+#   fit_phylo_100 = condinformation(discretize(elite_trait_avg), discretize(lag(max_genotype_pairwise_distance, 100)), discretize(lag(elite_trait_avg, 100))),
+#   fit_phylo_1000 = condinformation(discretize(elite_trait_avg), discretize(lag(max_genotype_pairwise_distance, 1000)), discretize(lag(elite_trait_avg, 1000))),
+#   fit_phylo_2000 = condinformation(discretize(elite_trait_avg), discretize(lag(max_genotype_pairwise_distance, 2000)), discretize(lag(elite_trait_avg, 2000))),  
+#   fit_phylo_3000 = condinformation(discretize(elite_trait_avg), discretize(lag(max_genotype_pairwise_distance, 3000)), discretize(lag(elite_trait_avg, 3000))),
+#   fit_phylo_4000 = condinformation(discretize(elite_trait_avg), discretize(lag(max_genotype_pairwise_distance, 4000)), discretize(lag(elite_trait_avg, 4000))),
+#   fit_fit_1000 = condinformation(discretize(elite_trait_avg),discretize(lag(elite_trait_avg, 1000)), discretize(lag(max_genotype_pairwise_distance, 1000))),
+#   fit_fit_2000 = condinformation(discretize(elite_trait_avg), discretize(lag(elite_trait_avg, 2000)), discretize(lag(max_genotype_pairwise_distance, 2000))),  
+#   fit_fit_3000 = condinformation(discretize(elite_trait_avg), discretize(lag(elite_trait_avg, 3000)), discretize(lag(max_genotype_pairwise_distance, 3000))),
+#   fit_fit_4000 = condinformation(discretize(elite_trait_avg), discretize(lag(elite_trait_avg, 4000)), discretize(lag(max_genotype_pairwise_distance, 4000))),
+#     fit_pheno_100 = condinformation(discretize(elite_trait_avg), discretize(lag(phen_diversity, 100)), discretize(lag(elite_trait_avg, 100))),
+#   fit_pheno_1000 = condinformation(discretize(elite_trait_avg), discretize(lag(phen_diversity, 1000)), discretize(lag(elite_trait_avg, 1000))),
+#   fit_pheno_2000 = condinformation(discretize(elite_trait_avg), discretize(lag(phen_diversity, 2000)), discretize(lag(elite_trait_avg, 2000))),  
+#   fit_pheno_3000 = condinformation(discretize(elite_trait_avg), discretize(lag(phen_diversity, 3000)), discretize(lag(elite_trait_avg, 3000))),
+#   fit_pheno_4000 = condinformation(discretize(elite_trait_avg), discretize(lag(phen_diversity, 4000)), discretize(lag(elite_trait_avg, 4000))),
+#     pheno_phylo = mutinformation(discretize(phen_diversity), discretize(max_genotype_pairwise_distance))
+#       )
+
+
+# res <- data %>% group_by(directory, selection_name) %>%
+# summarise(
+#   fit_phylo_100 = condinformation(discretize(elite_trait_avg), discretize(lag(max_phenotype_pairwise_distance, 100)), discretize(lag(elite_trait_avg, 100))),
+#   fit_phylo_1000 = condinformation(discretize(elite_trait_avg), discretize(lag(max_phenotype_pairwise_distance, 1000)), discretize(lag(elite_trait_avg, 1000))),
+#   fit_phylo_2000 = condinformation(discretize(elite_trait_avg), discretize(lag(max_phenotype_pairwise_distance, 2000)), discretize(lag(elite_trait_avg, 2000))),  
+#   fit_phylo_3000 = condinformation(discretize(elite_trait_avg), discretize(lag(max_phenotype_pairwise_distance, 3000)), discretize(lag(elite_trait_avg, 3000))),
+#   fit_phylo_4000 = condinformation(discretize(elite_trait_avg), discretize(lag(max_phenotype_pairwise_distance, 4000)), discretize(lag(elite_trait_avg, 4000))),
+#   fit_phylo_5000 = condinformation(discretize(elite_trait_avg), discretize(lag(max_phenotype_pairwise_distance, 5000)), discretize(lag(elite_trait_avg, 5000))),
+#   fit_fit_1000 = condinformation(discretize(elite_trait_avg),discretize(lag(elite_trait_avg, 1000)), discretize(lag(max_phenotype_pairwise_distance, 1000))),
+#   fit_fit_2000 = condinformation(discretize(elite_trait_avg), discretize(lag(elite_trait_avg, 2000)), discretize(lag(max_phenotype_pairwise_distance, 2000))),  
+#   fit_fit_3000 = condinformation(discretize(elite_trait_avg), discretize(lag(elite_trait_avg, 3000)), discretize(lag(max_phenotype_pairwise_distance, 3000))),
+#   fit_fit_4000 = condinformation(discretize(elite_trait_avg), discretize(lag(elite_trait_avg, 4000)), discretize(lag(max_phenotype_pairwise_distance, 4000))),
+#     fit_pheno_100 = condinformation(discretize(elite_trait_avg), discretize(lag(phen_diversity, 100)), discretize(lag(elite_trait_avg, 100))),
+#   fit_pheno_1000 = condinformation(discretize(elite_trait_avg), discretize(lag(phen_diversity, 1000)), discretize(lag(elite_trait_avg, 1000))),
+#   fit_pheno_2000 = condinformation(discretize(elite_trait_avg), discretize(lag(phen_diversity, 2000)), discretize(lag(elite_trait_avg, 2000))),  
+#   fit_pheno_3000 = condinformation(discretize(elite_trait_avg), discretize(lag(phen_diversity, 3000)), discretize(lag(elite_trait_avg, 3000))),
+#   fit_pheno_4000 = condinformation(discretize(elite_trait_avg), discretize(lag(phen_diversity, 4000)), discretize(lag(elite_trait_avg, 4000))),
+#   fit_pheno_5000 = condinformation(discretize(elite_trait_avg), discretize(lag(phen_diversity, 5000)), discretize(lag(elite_trait_avg, 5000))),
+#       pheno_phylo = mutinformation(discretize(phen_diversity), discretize(max_phenotype_pairwise_distance))
+#       )
+
+res <- data %>% group_by(directory, selection_name) %>%
+summarise(
+  fit_phylo_10 = condinformation(discretize(elite_trait_avg), discretize(lag(max_phenotype_pairwise_distance, 1)), discretize(lag(elite_trait_avg, 1))),
+  fit_phylo_100 = condinformation(discretize(elite_trait_avg), discretize(lag(max_phenotype_pairwise_distance, 10)), discretize(lag(elite_trait_avg, 10))),
+  fit_phylo_1000 = condinformation(discretize(elite_trait_avg), discretize(lag(max_phenotype_pairwise_distance, 100)), discretize(lag(elite_trait_avg, 100))),
+  fit_phylo_10000 = condinformation(discretize(elite_trait_avg), discretize(lag(max_phenotype_pairwise_distance, 1000)), discretize(lag(elite_trait_avg, 1000))),
+  fit_phylo_100000 = condinformation(discretize(elite_trait_avg), discretize(lag(max_phenotype_pairwise_distance, 10000)), discretize(lag(elite_trait_avg, 10000))),  
+  fit_fit_10000 = condinformation(discretize(elite_trait_avg),discretize(lag(elite_trait_avg, 1000)), discretize(lag(max_phenotype_pairwise_distance, 1000))),
+  fit_fit_100000 = condinformation(discretize(elite_trait_avg), discretize(lag(elite_trait_avg, 10000)), discretize(lag(max_phenotype_pairwise_distance, 10000))),  
+    fit_pheno_10 = condinformation(discretize(elite_trait_avg), discretize(lag(phen_diversity, 1)), discretize(lag(elite_trait_avg, 1))),
+      fit_pheno_100 = condinformation(discretize(elite_trait_avg), discretize(lag(phen_diversity, 10)), discretize(lag(elite_trait_avg, 10))),
+      fit_pheno_1000 = condinformation(discretize(elite_trait_avg), discretize(lag(phen_diversity, 100)), discretize(lag(elite_trait_avg, 100))),
+  fit_pheno_10000 = condinformation(discretize(elite_trait_avg), discretize(lag(phen_diversity, 1000)), discretize(lag(elite_trait_avg, 1000))),
+  fit_pheno_100000 = condinformation(discretize(elite_trait_avg), discretize(lag(phen_diversity, 10000)), discretize(lag(elite_trait_avg, 10000))),
+      pheno_phylo = mutinformation(discretize(phen_diversity), discretize(max_phenotype_pairwise_distance))
+      )
+
+res <- res %>% pivot_longer(cols=contains("00"))
+res$offset <- str_extract(res$name, "[:digit:]*$")
+res$Type <- case_when(str_detect(res$name, "phylo") ~ "Phylogenetic", TRUE ~ "Phenotypic")
+ggplot(res %>% filter(str_detect(name, "fit_ph*")), aes(x=as.factor(offset), y=value, color=Type)) + geom_boxplot() + facet_wrap(~selection_name) + scale_x_discrete("Lag") + scale_y_continuous("Predictive conditional information") + theme(legend.position = c(1, 0),
+        legend.justification = c(1, 0)) + scale_color_discrete("")
+
+```
+
+# Manuscript figures
+
+```{r, manuscript_figures, message=FALSE, cache=TRUE, warning=FALSE}
+# legend <- cowplot::get_legend(
+#     elite_ave_performance_fig +
+#       guides(
+#         color=guide_legend(nrow=1),
+#         fill=guide_legend(nrow=1)
+#       ) +
+#       theme(
+#         legend.position = "bottom",
+#         legend.box="horizontal",
+#         legend.justification="center"
+#       )
+#   )
+# 
+# grid <- plot_grid(
+#   elite_ave_performance_fig +
+#     ggtitle("Performance over time") +
+#     labs(subtitle="") +
+#     theme(legend.position="none"),
+#   elite_final_performance_fig +
+#     ggtitle("Final performance") +
+#     theme(),
+#   unique_start_position_coverage_fig +
+#     ggtitle("Activation position coverage over time") +
+#     labs(subtitle="") +
+#     theme(legend.position="none"),
+#   unique_start_positions_coverage_final_fig +
+#     ggtitle("Final activation position coverage") +
+#     theme(),
+#   nrow=2,
+#   ncol=2,
+#   rel_widths=c(3,2),
+#   labels="auto"
+# )
+# 
+# grid <- plot_grid(
+#   grid,
+#   legend,
+#   nrow=2,
+#   ncol=1,
+#   rel_heights=c(1, 0.1)
+# )
+# 
+# save_plot(
+#   "tournament-vs-lexicase-panel.pdf",
+#   grid,
+#   base_width=12,
+#   base_height=8
+# )
+# 
+# grid
+```

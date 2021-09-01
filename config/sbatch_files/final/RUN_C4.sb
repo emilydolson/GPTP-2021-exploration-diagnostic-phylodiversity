@@ -1,0 +1,37 @@
+#!/bin/bash
+########## Define Resources Needed with SBATCH Lines ##########
+
+#SBATCH --time=48:00:00          # limit of wall clock time - how long the job will run (same as -t)
+#SBATCH --array=1-50
+#SBATCH --mem=4G        # memory required per node - amount of memory (in bytes)
+#SBATCH --job-name diagnose         # you can give your job a name for easier identification (same as -J)
+#SBATCH --account=devolab
+
+########## Command Lines to Run ##########
+
+module load GCCcore/9.1.0
+
+JOB_SEED_OFFSET=100200
+SEED=$((JOB_SEED_OFFSET + SLURM_ARRAY_TASK_ID - 1))
+
+EXEC=dia_world
+CONFIG_DIR=/mnt/scratch/dolsonem/GPTP-2021-exploration-diagnostic-phylodiversity
+RUN_DIR=/mnt/scratch/dolsonem/GPTP-2021-exploration-diagnostic-phylodiversity/data/exploration_metric/RUN_C4_${SEED}
+
+# Create the run directory
+mkdir -p ${RUN_DIR}
+
+# Copy configuration to run directory
+cd ${RUN_DIR}
+cp ${CONFIG_DIR}/*.cfg .
+cp ${CONFIG_DIR}/${EXEC} .
+
+# Run job
+RUN_PARAMS="-ACCURACY 0.99 -CREDIT 0.0 -DIAGNOSTIC 3 -LEX_EPS 0 -MAX_GENS 500000 -MEAN 0.0 -MUTATE_PER 0.007 -OBJECTIVE_CNT 50 -OUTPUT_DIR ./ -POP_SIZE 500 -PRINT_INTERVAL 1000 -SELECTION 8 -RESOURCE_SELECT_RES_INFLOW 250 -RESOURCE_SELECT_COST .1 -RESOURCE_SELECT_NICHE_WIDTH 0 -RESOURCE_SELECT_INITIAL_RES 100 -RESOURCE_SELECT_RES_OUTFLOW .0001 -RESOURCE_SELECT_MAX_BONUS 5 -RESOURCE_SELECT_FRAC 1 -RESOURCE_SELECT_SCORE_EXPONENT .25 -SNAP_INTERVAL 10000 -STD 1.0 -TARGET 25.0 -TOUR_SIZE 8"
+echo "./${EXEC} ${RUN_PARAMS}" > cmd.log
+./${EXEC} ${RUN_PARAMS} > run.log
+
+
+# Cleanup job
+rm ${RUN_DIR}/*.cfg
+rm ${RUN_DIR}/${EXEC}
